@@ -158,12 +158,16 @@
                                                    [%]))))
 
 (defn- make-preflight-handler [access-control]
-  (fn [request]
-    (add-access-control request
-                        access-control
-                        {:status 200
-                         :headers {}
-                         :body "preflight complete"})))
+  (fn [args]
+    (let [[request respond _] args
+          response (add-access-control request
+                                       access-control
+                                       {:status 200
+                                        :headers {}
+                                        :body "preflight complete"})]
+      (if (= (count args) 1)
+        response
+        (respond response)))))
 
 (defn- wrap-handler [handler access-control]
   (fn
@@ -189,7 +193,7 @@
         request (first handler-args)]
     (if (and (preflight? request)
              (allow-request? request access-control))
-      (preflight-handler request)
+      (preflight-handler handler-args)
       (wrapped-handler handler-args))))
 
 (defn wrap-cors
