@@ -6,7 +6,7 @@
   (testing "with empty vector"
     (is (not (allow-request? {:headers {"origin" "http://eample.com"}}
                              {:access-control-allow-origin []}))))
-  (testing "with one regular expressions"
+  (testing "with one regular expression"
     (are [origin expected]
       (is (= expected
              (allow-request?
