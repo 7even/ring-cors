@@ -157,18 +157,40 @@
                                                    %
                                                    [%]))))
 
-(defn handle-cors [handler request access-control response-handler]
-  (if (and (preflight? request) (allow-request? request access-control))
-    (let [blank-response {:status 200
-                          :headers {}
-                          :body "preflight complete"}]
-      (response-handler request access-control blank-response))
-    (if (origin request)
-      (if (allow-request? request access-control)
-        (if-let [response (handler request)]
-          (response-handler request access-control response))
-        (handler request))
-      (handler request))))
+(defn- make-preflight-handler [access-control]
+  (fn [request]
+    (add-access-control request
+                        access-control
+                        {:status 200
+                         :headers {}
+                         :body "preflight complete"})))
+
+(defn- wrap-handler [handler access-control]
+  (fn
+    ([args]
+     (let [request (first args)]
+       (if (origin request)
+         (if (allow-request? request access-control)
+           (if (= (count args) 1)
+             ;; synchronous request
+             (when-let [response (handler request)]
+               (add-access-control request access-control response))
+             ;; asynchronous request
+             (let [[_ respond raise] args]
+               (handler request
+                        #(respond (add-access-control request access-control %))
+                        raise)))
+           (apply handler args))
+         (apply handler args))))))
+
+(defn- handle-cors [handler access-control handler-args]
+  (let [preflight-handler (make-preflight-handler access-control)
+        wrapped-handler (wrap-handler handler access-control)
+        request (first handler-args)]
+    (if (and (preflight? request)
+             (allow-request? request access-control))
+      (preflight-handler request)
+      (wrapped-handler handler-args))))
 
 (defn wrap-cors
   "Middleware that adds Cross-Origin Resource Sharing headers.
@@ -181,5 +203,8 @@
   "
   [handler & access-control]
   (let [access-control (normalize-config access-control)]
-    (fn [request]
-      (handle-cors handler request access-control add-access-control))))
+    (fn
+      ([request]
+       (handle-cors handler access-control [request]))
+      ([request respond raise]
+       (handle-cors handler access-control [request respond raise])))))
