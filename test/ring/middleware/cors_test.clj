@@ -35,12 +35,11 @@
       "http://api.burningswell.com" true
       "http://dev.burningswell.com" true)))
 
-(defn handler [request]
-  ((wrap-cors (fn [_] {})
-              :access-control-allow-origin #"http://example.com"
-              :access-control-allow-headers #{:accept :content-type}
-              :access-control-allow-methods #{:get :put :post})
-   request))
+(def handler
+  (wrap-cors (fn [_] {})
+             :access-control-allow-origin #"http://example.com"
+             :access-control-allow-headers #{:accept :content-type}
+             :access-control-allow-methods #{:get :put :post}))
 
 (deftest test-preflight
   (testing "whitelist concrete headers"
