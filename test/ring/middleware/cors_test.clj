@@ -41,6 +41,12 @@
              :access-control-allow-headers #{:accept :content-type}
              :access-control-allow-methods #{:get :put :post}))
 
+(def async-handler
+  (wrap-cors (fn [_ respond _] (respond {}))
+             :access-control-allow-origin #"http://example.com"
+             :access-control-allow-headers #{:accept :content-type}
+             :access-control-allow-methods #{:get :put :post}))
+
 (deftest test-preflight
   (testing "whitelist concrete headers"
     (let [headers {"origin" "http://example.com"
@@ -98,6 +104,93 @@
                    {:request-method :options
                     :uri "/"
                     :headers headers}))))))
+
+(deftest test-preflight-async
+  (testing "whitelist concrete headers"
+    (let [headers {"origin" "http://example.com"
+                   "access-control-request-method" "POST"
+                   "access-control-request-headers" "Accept, Content-Type"}
+          response (promise)
+          exception (promise)]
+      (async-handler {:request-method :options
+                      :uri "/"
+                      :headers headers}
+                     response
+                     exception)
+      (is (= @response
+             {:status 200
+              :headers {"Access-Control-Allow-Origin" "http://example.com"
+                        "Access-Control-Allow-Headers" "Accept, Content-Type"
+                        "Access-Control-Allow-Methods" "GET, POST, PUT"}
+              :body "preflight complete"}))
+      (is (not (realized? exception)))))
+
+  (testing "whitelist any headers"
+    (let [handler (wrap-cors (fn [_ respond _] (respond {}))
+                             :access-control-allow-origin #"http://example.com"
+                             :access-control-allow-methods #{:get :put :post})
+          response (promise)
+          exception (promise)]
+      (handler {:request-method :options
+                :uri "/"
+                :headers {"origin" "http://example.com"
+                          "access-control-request-method" "POST"
+                          "access-control-request-headers" "x-foo, x-bar"}}
+               response
+               exception)
+      (is (= @response
+             {:status 200
+              :headers {"Access-Control-Allow-Origin" "http://example.com"
+                        "Access-Control-Allow-Headers" "X-Bar, X-Foo"
+                        "Access-Control-Allow-Methods" "GET, POST, PUT"}
+              :body "preflight complete"}))
+      (is (not (realized? exception)))))
+
+  (testing "whitelist headers ignore case"
+    (let [headers {"origin" "http://example.com"
+                   "access-control-request-method" "POST"
+                   "access-control-request-headers"
+                   "ACCEPT, CONTENT-TYPE"}
+          response (promise)
+          exception (promise)]
+      (async-handler {:request-method :options
+                      :uri "/"
+                      :headers headers}
+                     response
+                     exception)
+      (is (= @response
+             {:status 200
+              :headers {"Access-Control-Allow-Origin" "http://example.com"
+                        "Access-Control-Allow-Headers" "Accept, Content-Type"
+                        "Access-Control-Allow-Methods" "GET, POST, PUT"}
+              :body "preflight complete"}))
+      (is (not (realized? exception)))))
+
+  (testing "method not allowed"
+    (let [response (promise)
+          exception (promise)]
+      (async-handler {:request-method :options
+                      :uri "/"
+                      :headers {"origin" "http://example.com"
+                                "access-control-request-method" "DELETE"}}
+                     response
+                     exception)
+      (is (empty? @response))
+      (is (not (realized? exception)))))
+
+  (testing "header not allowed"
+    (let [headers {"origin" "http://example.com"
+                   "access-control-request-method" "GET"
+                   "access-control-request-headers" "x-another-custom-header"}
+          response (promise)
+          exception (promise)]
+      (async-handler {:request-method :options
+                      :uri "/"
+                      :headers headers}
+                     response
+                     exception)
+      (is (empty? @response))
+      (is (not (realized? exception))))))
 
 (deftest test-preflight-header-subset
   (is (= (handler {:request-method :options
