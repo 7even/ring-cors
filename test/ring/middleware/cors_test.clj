@@ -308,9 +308,10 @@
                 :uri "/"}))))
 
 (deftest test-method-not-allowed-async
-  (let [handler (wrap-cors (fn [_ respond _] (respond {}))
+  (let [allowed-methods [:get :post :patch :put :delete]
+        handler (wrap-cors (fn [_ respond _] (respond {}))
                            :access-control-allow-origin #".*"
-                           :access-control-allow-methods [:get :post :patch :put :delete])
+                           :access-control-allow-methods allowed-methods)
         response (promise)
         exception (promise)]
     (handler {:request-method :options

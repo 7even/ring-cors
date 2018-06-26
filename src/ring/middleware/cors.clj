@@ -182,7 +182,10 @@
              ;; asynchronous request
              (let [[_ respond raise] args]
                (handler request
-                        #(respond (if % (add-access-control request access-control %)))
+                        #(respond (if %
+                                    (add-access-control request
+                                                        access-control
+                                                        %)))
                         raise)))
            (apply handler args))
          (apply handler args))))))
