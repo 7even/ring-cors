@@ -266,6 +266,20 @@
               :get :uri "/"
               :headers {"origin" "http://example.com"}}))))
 
+(deftest test-no-cors-header-when-handler-returns-nil-async
+  (let [handler (wrap-cors (fn [_ respond _] (respond nil))
+                           :access-control-allow-origin #".*example.com"
+                           :access-control-allow-methods [:get])
+        response (promise)
+        exception (promise)]
+    (handler {:request-method
+              :get :uri "/"
+              :headers {"origin" "http://example.com"}}
+             response
+             exception)
+    (is (nil? @response))
+    (is (not (realized? exception)))))
+
 (deftest test-options-without-cors-header
   (is (empty? ((wrap-cors
                 (fn [_] {})

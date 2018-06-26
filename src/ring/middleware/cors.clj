@@ -177,12 +177,12 @@
          (if (allow-request? request access-control)
            (if (= (count args) 1)
              ;; synchronous request
-             (when-let [response (handler request)]
+             (if-let [response (handler request)]
                (add-access-control request access-control response))
              ;; asynchronous request
              (let [[_ respond raise] args]
                (handler request
-                        #(respond (add-access-control request access-control %))
+                        #(respond (if % (add-access-control request access-control %)))
                         raise)))
            (apply handler args))
          (apply handler args))))))
