@@ -286,6 +286,18 @@
                 :access-control-allow-origin #".*example.com")
                {:request-method :options :uri "/"}))))
 
+(deftest test-options-without-cors-header-async
+  (let [handler (wrap-cors
+                 (fn [_ respond _] (respond {}))
+                 :access-control-allow-origin #".*example.com")
+        response (promise)
+        exception (promise)]
+    (handler {:request-method :options :uri "/"}
+             response
+             exception)
+    (is (empty? @response))
+    (is (not (realized? exception)))))
+
 (deftest test-method-not-allowed
   (is (empty? ((wrap-cors
                 (fn [_] {})
@@ -294,6 +306,20 @@
                {:request-method :options
                 :headers {"origin" "http://foo.com"}
                 :uri "/"}))))
+
+(deftest test-method-not-allowed-async
+  (let [handler (wrap-cors (fn [_ respond _] (respond {}))
+                           :access-control-allow-origin #".*"
+                           :access-control-allow-methods [:get :post :patch :put :delete])
+        response (promise)
+        exception (promise)]
+    (handler {:request-method :options
+              :headers {"origin" "http://foo.com"}
+              :uri "/"}
+             response
+             exception)
+    (is (empty? @response))
+    (is (not (realized? exception)))))
 
 (deftest additional-headers
   (let [response ((wrap-cors (fn [_] {:status 200})
@@ -311,6 +337,27 @@
              "Access-Control-Allow-Origin" "http://example.com"
              "Access-Control-Expose-Headers" "Etag"}}
            response))))
+
+(deftest additional-headers-async
+  (let [handler (wrap-cors (fn [_ respond _] (respond {:status 200}))
+                           :access-control-allow-credentials "true"
+                           :access-control-allow-origin #".*"
+                           :access-control-allow-methods [:get]
+                           :access-control-expose-headers "Etag")
+        response (promise)
+        exception (promise)]
+    (handler {:request-method :get
+              :uri "/"
+              :headers {"origin" "http://example.com"}}
+             response
+             exception)
+    (is (= @response
+           {:status 200
+            :headers
+            {"Access-Control-Allow-Credentials" "true"
+             "Access-Control-Allow-Methods" "GET"
+             "Access-Control-Allow-Origin" "http://example.com"
+             "Access-Control-Expose-Headers" "Etag"}}))))
 
 (deftest test-parse-headers
   (are [headers expected]
@@ -364,3 +411,42 @@
                      :headers        {"origin" "http://foo.com"}
                      :uri            "/"})]
       (is (empty? response)))))
+
+(deftest test-dynamic-allow-origin-async
+  (testing "Testing an allow-origin with a callback function
+            for dynamic checks, where it returns true (allowed)"
+    (let [handler (wrap-cors
+                   (fn [_ respond _] (respond {}))
+                   :access-control-allow-origin
+                   (fn my-callback [req] true)
+                   :access-control-allow-methods
+                   [:get :post :patch :put :delete])
+          response (promise)
+          exception (promise)]
+      (handler {:request-method :get
+                :headers        {"origin" "http://foo.com"}
+                :uri            "/"}
+               response
+               exception)
+      (is (= @response
+             {:headers
+              {"Access-Control-Allow-Methods" "DELETE, GET, PATCH, POST, PUT"
+               "Access-Control-Allow-Origin" "http://foo.com"}}))
+      (is (not (realized? exception)))))
+  (testing "Testing an allow-origin with a callback function for dynamic checks,
+           where it returns false (not allowed)"
+    (let [handler (wrap-cors
+                   (fn [_ respond _] (respond {}))
+                   :access-control-allow-origin
+                   (fn my-callback [req] false)
+                   :access-control-allow-methods
+                   [:get :post :patch :put :delete])
+          response (promise)
+          exception (promise)]
+      (handler {:request-method :get
+                :headers        {"origin" "http://foo.com"}
+                :uri            "/"}
+               response
+               exception)
+      (is (empty? @response))
+      (is (not (realized? exception))))))
