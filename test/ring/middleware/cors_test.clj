@@ -35,7 +35,7 @@
       "http://api.burningswell.com" true
       "http://dev.burningswell.com" true)))
 
-(def handler
+(def sync-handler
   (wrap-cors (fn [_] {})
              :access-control-allow-origin #"http://example.com"
              :access-control-allow-headers #{:accept :content-type}
@@ -57,9 +57,9 @@
                         "Access-Control-Allow-Headers" "Accept, Content-Type"
                         "Access-Control-Allow-Methods" "GET, POST, PUT"}
               :body "preflight complete"}
-             (handler {:request-method :options
-                       :uri "/"
-                       :headers headers})))))
+             (sync-handler {:request-method :options
+                            :uri "/"
+                            :headers headers})))))
 
   (testing "whitelist any headers"
     (is (= {:status 200,
@@ -77,12 +77,12 @@
                        "access-control-request-headers" "x-foo, x-bar"}}))))
 
   (testing "whitelist headers ignore case"
-    (is (= (handler {:request-method :options
-                     :uri "/"
-                     :headers {"origin" "http://example.com"
-                               "access-control-request-method" "POST"
-                               "access-control-request-headers"
-                               "ACCEPT, CONTENT-TYPE"}})
+    (is (= (sync-handler {:request-method :options
+                          :uri "/"
+                          :headers {"origin" "http://example.com"
+                                    "access-control-request-method" "POST"
+                                    "access-control-request-headers"
+                                    "ACCEPT, CONTENT-TYPE"}})
            {:status 200
             :headers {"Access-Control-Allow-Origin" "http://example.com"
                       "Access-Control-Allow-Headers" "Accept, Content-Type"
@@ -90,7 +90,7 @@
             :body "preflight complete"})))
 
   (testing "method not allowed"
-    (is (empty? (handler
+    (is (empty? (sync-handler
                  {:request-method :options
                   :uri "/"
                   :headers {"origin" "http://example.com"
@@ -100,7 +100,7 @@
     (let [headers {"origin" "http://example.com"
                    "access-control-request-method" "GET"
                    "access-control-request-headers" "x-another-custom-header"}]
-      (is (empty? (handler
+      (is (empty? (sync-handler
                    {:request-method :options
                     :uri "/"
                     :headers headers}))))))
@@ -193,11 +193,11 @@
       (is (not (realized? exception))))))
 
 (deftest test-preflight-header-subset
-  (is (= (handler {:request-method :options
-                   :uri "/"
-                   :headers {"origin" "http://example.com"
-                             "access-control-request-method" "POST"
-                             "access-control-request-headers" "Accept"}})
+  (is (= (sync-handler {:request-method :options
+                        :uri "/"
+                        :headers {"origin" "http://example.com"
+                                  "access-control-request-method" "POST"
+                                  "access-control-request-headers" "Accept"}})
          {:status 200
           :headers {"Access-Control-Allow-Origin" "http://example.com"
                     "Access-Control-Allow-Headers" "Accept, Content-Type"
@@ -226,13 +226,13 @@
   (testing "success"
     (is (= {:headers {"Access-Control-Allow-Methods" "GET, POST, PUT",
                       "Access-Control-Allow-Origin" "http://example.com"}}
-           (handler {:request-method :post
-                     :uri "/"
-                     :headers {"origin" "http://example.com"}}))))
-  (testing "failure"
-    (is (empty? (handler {:request-method :get
+           (sync-handler {:request-method :post
                           :uri "/"
-                          :headers {"origin" "http://foo.com"}})))))
+                          :headers {"origin" "http://example.com"}}))))
+  (testing "failure"
+    (is (empty? (sync-handler {:request-method :get
+                               :uri "/"
+                               :headers {"origin" "http://foo.com"}})))))
 
 (deftest test-cors-async
   (testing "success"
