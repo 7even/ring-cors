@@ -204,6 +204,24 @@
                     "Access-Control-Allow-Methods" "GET, POST, PUT"}
           :body "preflight complete"})))
 
+(deftest test-preflight-header-subset-async
+  (let [response (promise)
+        exception (promise)]
+    (async-handler {:request-method :options
+                    :uri "/"
+                    :headers {"origin" "http://example.com"
+                              "access-control-request-method" "POST"
+                              "access-control-request-headers" "Accept"}}
+                   response
+                   exception)
+    (is (= @response
+           {:status 200
+            :headers {"Access-Control-Allow-Origin" "http://example.com"
+                      "Access-Control-Allow-Headers" "Accept, Content-Type"
+                      "Access-Control-Allow-Methods" "GET, POST, PUT"}
+            :body "preflight complete"}))
+    (is (not (realized? exception)))))
+
 (deftest test-cors
   (testing "success"
     (is (= {:headers {"Access-Control-Allow-Methods" "GET, POST, PUT",
@@ -215,6 +233,30 @@
     (is (empty? (handler {:request-method :get
                           :uri "/"
                           :headers {"origin" "http://foo.com"}})))))
+
+(deftest test-cors-async
+  (testing "success"
+    (let [response (promise)
+          exception (promise)]
+      (async-handler {:request-method :post
+                      :uri "/"
+                      :headers {"origin" "http://example.com"}}
+                     response
+                     exception)
+      (is (= @response
+             {:headers {"Access-Control-Allow-Methods" "GET, POST, PUT",
+                        "Access-Control-Allow-Origin" "http://example.com"}}))
+      (is (not (realized? exception)))))
+  (testing "failure"
+    (let [response (promise)
+          exception (promise)]
+      (async-handler {:request-method :get
+                      :uri "/"
+                      :headers {"origin" "http://foo.com"}}
+                     response
+                     exception)
+      (is (empty? @response))
+      (is (not (realized? exception))))))
 
 (deftest test-no-cors-header-when-handler-returns-nil
   (is (nil? ((wrap-cors (fn [_] nil)
